@@ -1237,6 +1237,9 @@ function viewWelcome(){
   </section>`;
 }
 
+/* Logo oficial San Joaquín (lockup horizontal con ícono + texto) */
+const LOGO_URL = "https://www.sanjoaquin.com.co/wp-content/uploads/2025/11/LOGO-SJ-HOME-05.png";
+
 function topbar(active){
   const authButtons = state.user ? `
       <span class="user-pill">Hola, ${state.user.name}</span>
@@ -1248,8 +1251,8 @@ function topbar(active){
   `;
   return `
   <div class="topbar">
-    <div class="brand" onclick="go('welcome')" style="cursor:pointer">
-      <div>SAN JOAQUÍN<small>Hotel Campestre · Restaurante</small></div>
+    <div class="brand-logo" onclick="go('welcome')" style="cursor:pointer" role="button" aria-label="San Joaquín — Inicio">
+      <img src="${LOGO_URL}" alt="San Joaquín — Hotel Restaurante Campestre">
     </div>
     <nav>
       <button class="icon-btn ${active==='welcome'?'active':''}" onclick="go('welcome')">🏠 Inicio</button>
