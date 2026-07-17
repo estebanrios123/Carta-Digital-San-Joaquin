@@ -12,7 +12,7 @@
    la tarjeta simplemente se ve vacía hasta que lo agregues.
    ========================================================= */
 
-let DISHES = [
+const DISHES = [
   /* ---------- ENTRADAS ---------- */
   {
     id: "e1",
@@ -674,7 +674,7 @@ let DISHES = [
     name: "Paella Mariscos",
     ingredientes: "Papa francesa",
     precio: 62000,
-    model: "../modelos 3D/paella.glb"
+    model: "../modelos 3D/paella-mariscos.glb"
   },
   {
     id: "ar3",
@@ -1000,7 +1000,7 @@ let DISHES = [
 /* =========================================================
    CATEGORÍAS  (orden, textos y color igual a la referencia)
    ========================================================= */
-let CATEGORIES = [
+const CATEGORIES = [
   { key:"entradas", label:"Entradas",          tag:"Aperitivos para compartir y abrir el apetito",  accent:"maroon", icon:"cup" },
   { key:"criollo",   label:"Criollo Colombiano", tag:"Tradición colombiana en cada plato",            accent:"maroon", icon:"fork" },
   { key:"porciones", label:"Porciones",          tag:"Acompañamientos adicionales",                    accent:"green",  icon:"cup" },
@@ -1021,6 +1021,8 @@ let CATEGORIES = [
   { key:"postres",   label:"Postres",            tag:"Dulces tentaciones para cerrar",                 accent:"gold",   icon:"cake" },
 ];
 
+const ADMIN_PASSWORD = "sanjoaquin86";
+
 /* =========================================================
    ESTADO
    ========================================================= */
@@ -1030,120 +1032,16 @@ let state = {
   availability: {},      // { dishId:true } => true significa "código 86" (agotado)
   popular: {},           // { dishId:true } => plato marcado como popular
   chefRec: {},           // { dishId:true } => recomendación del chef
+  loadingAvail: true,
   modalDish: null,
   adminError: "",
+  isAdmin: false,
   adminTab: "86",        // "86" | "featured"
   dark: false,
-  qrUrl: "",
-  user: null,
-  authError: "",
-  registeredUsers: [],
-  promotions: [],
-  combos: [],
-  customDishes: []
+  qrUrl: ""
 };
 
 const app = document.getElementById("app");
-
-const API_BASE = 'http://localhost:3000/api';
-
-async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data && data.error ? data.error : 'Error de API');
-  }
-  return data;
-}
-
-async function adminRequest(path, options = {}) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {})
-  };
-  if (state.adminToken) {
-    headers.Authorization = `Bearer ${state.adminToken}`;
-  }
-  return apiRequest(path, { ...options, headers });
-}
-
-async function loadMenuData(){
-  try {
-    const [categories, items] = await Promise.all([
-      apiRequest('/categories'),
-      apiRequest('/items')
-    ]);
-    if (Array.isArray(categories) && categories.length) {
-      CATEGORIES = categories.map(cat => ({
-        key: cat.category_key,
-        label: cat.name,
-        tag: cat.description || '',
-        accent: cat.accent_color || 'green',
-        icon: cat.icon || 'cup'
-      }));
-    }
-    if (Array.isArray(items) && items.length) {
-      DISHES = items.map(item => ({
-        id: item.item_key,
-        cat: item.cat,
-        name: item.name,
-        ingredientes: item.ingredients || item.description || '',
-        cantidad: item.portion || '',
-        precio: Number(item.price) || 0,
-        model: item.model_path || ''
-      }));
-    }
-  } catch (err) {
-    console.error('No se pudo cargar la carta desde el backend:', err);
-  }
-}
-
-async function loadAdminResources(){
-  try {
-    const data = await adminRequest('/admin/resources');
-    state.promotions = data.promotions || [];
-    state.combos = data.combos || [];
-    state.customDishes = (data.customDishes || []).map(d => ({
-      id: `custom-${d.id}`,
-      cat: d.category_key || '',
-      name: d.name,
-      ingredientes: d.ingredients || '',
-      cantidad: d.portion || '',
-      precio: Number(d.price) || 0,
-      model: d.model_path || ''
-    }));
-  } catch (err) {
-    console.error('No se pudo cargar los recursos admin:', err);
-    state.promotions = [];
-    state.combos = [];
-    state.customDishes = [];
-  }
-}
-
-async function loadPublicResources(){
-  try {
-    const data = await apiRequest('/resources');
-    state.promotions = data.promotions || [];
-    state.combos = data.combos || [];
-    state.customDishes = (data.customDishes || []).map(d => ({
-      id: `custom-${d.id}`,
-      cat: d.category_key || '',
-      name: d.name,
-      ingredientes: d.ingredients || '',
-      cantidad: d.portion || '',
-      precio: Number(d.price) || 0,
-      model: d.model_path || ''
-    }));
-  } catch (err) {
-    console.error('No se pudo cargar recursos públicos:', err);
-    state.promotions = [];
-    state.combos = [];
-    state.customDishes = [];
-  }
-}
 
 function fmt(price){
   return "$" + price.toLocaleString("es-CO");
@@ -1162,28 +1060,59 @@ function isChef(dishId){
 }
 
 /* =========================================================
-   ESTADO TRANSITORIO EN MEMORIA
-   No se guarda nada en local. Para persistencia real, reemplaza
-   estas funciones con llamadas a tu backend/MariaDB.
+   PERSISTENCIA (window.storage) — compartida entre todos
+   los usuarios que escanean el QR, para que el código 86
+   del admin se refleje en todos los dispositivos.
    ========================================================= */
-function toggleAvailability(dishId){
+async function loadState(){
+  try{
+    const [availRes, popRes, chefRes] = await Promise.all([
+      window.storage.get("san-joaquin-availability", true).catch(()=>null),
+      window.storage.get("san-joaquin-popular", true).catch(()=>null),
+      window.storage.get("san-joaquin-chef", true).catch(()=>null)
+    ]);
+    state.availability = availRes && availRes.value ? JSON.parse(availRes.value) : {};
+    state.popular = popRes && popRes.value ? JSON.parse(popRes.value) : {};
+    state.chefRec = chefRes && chefRes.value ? JSON.parse(chefRes.value) : {};
+  }catch(e){
+    state.availability = {};
+    state.popular = {};
+    state.chefRec = {};
+  }
+  state.loadingAvail = false;
+  render();
+}
+
+async function toggleAvailability(dishId){
   state.availability[dishId] = !state.availability[dishId];
   render();
+  try{
+    await window.storage.set("san-joaquin-availability", JSON.stringify(state.availability), true);
+  }catch(e){ console.error("No se pudo guardar el estado", e); }
 }
 
-function togglePopular(dishId){
+async function togglePopular(dishId){
   state.popular[dishId] = !state.popular[dishId];
   render();
+  try{
+    await window.storage.set("san-joaquin-popular", JSON.stringify(state.popular), true);
+  }catch(e){ console.error("No se pudo guardar el estado", e); }
 }
 
-function toggleChef(dishId){
+async function toggleChef(dishId){
   state.chefRec[dishId] = !state.chefRec[dishId];
   render();
+  try{
+    await window.storage.set("san-joaquin-chef", JSON.stringify(state.chefRec), true);
+  }catch(e){ console.error("No se pudo guardar el estado", e); }
 }
 
-function clearAll86(){
+async function clearAll86(){
   state.availability = {};
   render();
+  try{
+    await window.storage.set("san-joaquin-availability", JSON.stringify(state.availability), true);
+  }catch(e){ console.error("No se pudo guardar el estado", e); }
 }
 
 /* =========================================================
@@ -1237,18 +1166,10 @@ function viewWelcome(){
   </section>`;
 }
 
-/* Logo oficial San Joaquín (lockup horizontal con ícono + texto) */
+/* Logo oficial San Joaquín */
 const LOGO_URL = "https://www.sanjoaquin.com.co/wp-content/uploads/2025/11/LOGO-SJ-HOME-05.png";
 
 function topbar(active){
-  const authButtons = state.user ? `
-      <span class="user-pill">Hola, ${state.user.name}</span>
-      <button class="icon-btn ${active==='account'?'active':''}" onclick="go('account')">👤 Mi Cuenta</button>
-      <button class="icon-btn small" onclick="logoutUser()">Salir</button>
-  ` : `
-      <button class="icon-btn ${active==='login'?'active':''}" onclick="go('login')">Ingresar</button>
-      <button class="icon-btn ${active==='register'?'active':''}" onclick="go('register')">Registrar</button>
-  `;
   return `
   <div class="topbar">
     <div class="brand-logo" onclick="go('welcome')" style="cursor:pointer" role="button" aria-label="San Joaquín — Inicio">
@@ -1258,325 +1179,13 @@ function topbar(active){
       <button class="icon-btn ${active==='welcome'?'active':''}" onclick="go('welcome')">🏠 Inicio</button>
       <button class="icon-btn ${active==='menu'?'active':''}" onclick="go('menu')">☰ Carta</button>
       <button class="icon-btn ${active==='admin'?'active':''}" onclick="goAdmin()">⚙ Admin</button>
-      ${authButtons}
       <button class="icon-btn round" onclick="toggleDark()" aria-label="Modo oscuro">${state.dark ? '☀' : '☾'}</button>
     </nav>
   </div>`;
 }
-function getDishName(itemId){
-  const dish = DISHES.concat(state.customDishes).find(d => d.id === itemId);
-  return dish ? dish.name : itemId;
-}
-function getMenuDishes(categoryKey){
-  return DISHES.filter(d => d.cat === categoryKey)
-    .concat(state.customDishes.filter(d => d.cat === categoryKey));
-}
-function renderPromotions(){
-  if(!state.promotions.length) return "";
-  return `<section class="promo-strip">
-    <div class="section-head">
-      <div>
-        <div class="eyebrow">Ofertas y promociones</div>
-        <h2>Promociones activas</h2>
-      </div>
-    </div>
-    <div class="promo-grid">
-      ${state.promotions.map(p => `
-        <article class="promo-card">
-          <div class="promo-tag">PROMO</div>
-          <h3>${p.title}</h3>
-          <p>${p.description}</p>
-          <div class="promo-bottom">
-            <span>${p.price ? fmt(p.price) : 'Precio por consulta'}</span>
-          </div>
-        </article>
-      `).join("")}
-    </div>
-  </section>`;
-}
-function renderCombos(){
-  if(!state.combos.length) return "";
-  return `<section class="combo-strip">
-    <div class="section-head">
-      <div>
-        <div class="eyebrow">Combos especiales</div>
-        <h2>Combos destacados</h2>
-      </div>
-    </div>
-    <div class="promo-grid">
-      ${state.combos.map(c => `
-        <article class="combo-card">
-          <div class="promo-tag combo">COMBO</div>
-          <h3>${c.title}</h3>
-          <p>${c.description}</p>
-          <div class="combo-items">${c.items.map(item => `<span>${getDishName(item)}</span>`).join(' · ')}</div>
-          <div class="promo-bottom">
-            <span>${c.price ? fmt(c.price) : 'Precio por consulta'}</span>
-          </div>
-        </article>
-      `).join("")}
-    </div>
-  </section>`;
-}
-async function loadResources(){
-  await Promise.all([loadMenuData(), loadPublicResources()]);
-}
-function saveResources(){
-  // persistence handled in each admin action via backend API.
-}
-async function addPromotion(){
-
-  const title = (document.getElementById('promo-title')?.value || '').trim();
-  const price = parseFloat(document.getElementById('promo-price')?.value || '0');
-  const description = (document.getElementById('promo-description')?.value || '').trim();
-  if(!title || !description){
-    alert('Completa el título y la descripción de la promoción.');
-    return;
-  }
-  try {
-    const data = await adminRequest('/admin/promotions', {
-      method: 'POST',
-      body: JSON.stringify({ title, description, price: Number.isFinite(price) ? price : null })
-    });
-    state.promotions.unshift(data);
-    document.getElementById('promo-title').value = '';
-    document.getElementById('promo-price').value = '';
-    document.getElementById('promo-description').value = '';
-    render();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-async function removePromotion(promoId){
-  try {
-    await adminRequest(`/admin/promotions/${promoId}`, { method: 'DELETE' });
-    state.promotions = state.promotions.filter(p => p.id !== promoId);
-    render();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-async function addCombo(){
-  const title = (document.getElementById('combo-title')?.value || '').trim();
-  const price = parseFloat(document.getElementById('combo-price')?.value || '0');
-  const itemsText = (document.getElementById('combo-items')?.value || '').trim();
-  const description = (document.getElementById('combo-description')?.value || '').trim();
-  if(!title || !itemsText){
-    alert('Completa el nombre y los IDs de los platos del combo.');
-    return;
-  }
-  const items = itemsText.split(',').map(x => x.trim()).filter(Boolean);
-  if(!items.length){
-    alert('Agrega al menos un plato válido al combo.');
-    return;
-  }
-  try {
-    const data = await adminRequest('/admin/combos', {
-      method: 'POST',
-      body: JSON.stringify({ title, description, price: Number.isFinite(price) ? price : null, items })
-    });
-    state.combos.unshift(data);
-    document.getElementById('combo-title').value = '';
-    document.getElementById('combo-price').value = '';
-    document.getElementById('combo-items').value = '';
-    document.getElementById('combo-description').value = '';
-    render();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-async function removeCombo(comboId){
-  try {
-    await adminRequest(`/admin/combos/${comboId}`, { method: 'DELETE' });
-    state.combos = state.combos.filter(c => c.id !== comboId);
-    render();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-async function addCustomDish(){
-  const name = (document.getElementById('dish-name')?.value || '').trim();
-  const price = parseFloat(document.getElementById('dish-price')?.value || '0');
-  const cat = (document.getElementById('dish-category')?.value || '').trim();
-  const ingredientes = (document.getElementById('dish-ingredients')?.value || '').trim();
-  const cantidad = (document.getElementById('dish-amount')?.value || '').trim();
-  if(!name || !cat || !Number.isFinite(price)){
-    alert('Completa nombre, categoría y precio del plato.');
-    return;
-  }
-  const categoryExists = CATEGORIES.some(c => c.key === cat);
-  if(!categoryExists){
-    alert('La categoría indicada no existe. Usa una key válida.');
-    return;
-  }
-  try {
-    const data = await adminRequest('/admin/custom-dishes', {
-      method: 'POST',
-      body: JSON.stringify({ name, price: Number.isFinite(price) ? price : null, category_key: cat, ingredientes, cantidad })
-    });
-    state.customDishes.unshift({
-      id: `custom-${data.id}`,
-      cat,
-      name: data.name,
-      ingredientes: data.ingredients || '',
-      cantidad: data.portion || '',
-      precio: Number(data.price) || 0,
-      model: data.model_path || ''
-    });
-    document.getElementById('dish-name').value = '';
-    document.getElementById('dish-price').value = '';
-    document.getElementById('dish-category').value = '';
-    document.getElementById('dish-ingredients').value = '';
-    document.getElementById('dish-amount').value = '';
-    render();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-async function removeCustomDish(dishId){
-  try {
-    const realId = dishId.replace(/^custom-/, '');
-    await adminRequest(`/admin/custom-dishes/${realId}`, { method: 'DELETE' });
-    state.customDishes = state.customDishes.filter(d => d.id !== dishId);
-    render();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-function genAdminId(prefix){
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-}
-function getSavedUsers(){
-  state.registeredUsers = state.registeredUsers || [];
-  return state.registeredUsers;
-}
-function saveUsers(users){
-  state.registeredUsers = users;
-}
-function logoutUser(){
-  state.user = null;
-  go('welcome');
-}
 
 function goAdmin(){
-  if(state.user && state.user.role === 'admin'){
-    go('admin');
-  } else {
-    go('admin-login');
-  }
-}
-
-function viewLogin(){
-  return `
-  ${topbar('login')}
-  <div class="auth-panel">
-    <div class="eyebrow">Acceso de cliente</div>
-    <h2>Iniciar sesión</h2>
-    <p>Accede a tu cuenta para guardar tus preferencias y ver tu perfil.</p>
-    <div class="auth-grid">
-      <input id="user-email" type="email" placeholder="Correo electrónico" onkeydown="if(event.key==='Enter')tryUserLogin()">
-      <input id="user-password" type="password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')tryUserLogin()">
-      ${state.authError ? `<div class="auth-error">${state.authError}</div>` : ""}
-      <button class="btn" onclick="tryUserLogin()">Ingresar</button>
-      <div class="auth-footer">
-        ¿No tienes cuenta? <button class="link-btn" onclick="go('register')">Regístrate aquí</button>
-      </div>
-    </div>
-  </div>
-  ${footer()}
-  `;
-}
-
-function viewRegister(){
-  return `
-  ${topbar('register')}
-  <div class="auth-panel">
-    <div class="eyebrow">Registro rápido</div>
-    <h2>Crea tu cuenta</h2>
-    <p>Regístrate para guardar tu información y acceder más rápido la próxima vez.</p>
-    <div class="auth-grid">
-      <input id="register-name" type="text" placeholder="Nombre completo" onkeydown="if(event.key==='Enter')tryUserRegister()">
-      <input id="register-email" type="email" placeholder="Correo electrónico" onkeydown="if(event.key==='Enter')tryUserRegister()">
-      <input id="register-password" type="password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')tryUserRegister()">
-      ${state.authError ? `<div class="auth-error">${state.authError}</div>` : ""}
-      <button class="btn" onclick="tryUserRegister()">Crear cuenta</button>
-      <div class="auth-footer">
-        ¿Ya tienes cuenta? <button class="link-btn" onclick="go('login')">Inicia sesión</button>
-      </div>
-    </div>
-  </div>
-  ${footer()}
-  `;
-}
-
-function viewAccount(){
-  if(!state.user){
-    go('login');
-    return '';
-  }
-  return `
-  ${topbar('account')}
-  <div class="auth-panel">
-    <div class="eyebrow">Tu perfil</div>
-    <h2>Bienvenido, ${state.user.name}</h2>
-    <p>Información guardada en este dispositivo.</p>
-    <div class="profile-card">
-      <div><strong>Nombre</strong><span>${state.user.name}</span></div>
-      <div><strong>Correo</strong><span>${state.user.email}</span></div>
-      <div><strong>Registrado</strong><span>${state.user.registeredAt}</span></div>
-    </div>
-    <button class="btn" onclick="logoutUser()">Cerrar sesión</button>
-  </div>
-  ${footer()}
-  `;
-}
-
-function tryUserLogin(){
-  const email = (document.getElementById('user-email')?.value || '').trim().toLowerCase();
-  const password = (document.getElementById('user-password')?.value || '').trim();
-  if(!email || !password){
-    state.authError = 'Completa todos los campos.';
-    render();
-    return;
-  }
-  const users = getSavedUsers();
-  const user = users.find(u => u.email === email && u.password === password);
-  if(!user){
-    state.authError = 'Correo o contraseña no válidos.';
-    render();
-    return;
-  }
-  state.user = {name: user.name, email: user.email, registeredAt: user.registeredAt};
-  state.authError = '';
-  go('account');
-}
-
-function tryUserRegister(){
-  const name = (document.getElementById('register-name')?.value || '').trim();
-  const email = (document.getElementById('register-email')?.value || '').trim().toLowerCase();
-  const password = (document.getElementById('register-password')?.value || '').trim();
-  if(!name || !email || !password){
-    state.authError = 'Completa todos los campos.';
-    render();
-    return;
-  }
-  if(password.length < 6){
-    state.authError = 'La contraseña debe tener al menos 6 caracteres.';
-    render();
-    return;
-  }
-  const users = getSavedUsers();
-  if(users.some(u => u.email === email)){
-    state.authError = 'Este correo ya está registrado.';
-    render();
-    return;
-  }
-  const newUser = {name, email, password, registeredAt: new Date().toLocaleDateString('es-CO')};
-  users.push(newUser);
-  saveUsers(users);
-  state.user = {name, email, registeredAt: newUser.registeredAt};
-  state.authError = '';
-  go('account');
+  go(state.isAdmin ? 'admin' : 'admin-login');
 }
 
 function setAdminTab(tab){
@@ -1588,25 +1197,20 @@ function viewMenu(){
   return `
   ${topbar('menu')}
   <div class="hub">
-    ${renderPromotions()}
-  ${renderCombos()}
-  <div class="hub-head">
+    <div class="hub-head">
       <div class="eyebrow">Nuestra Carta</div>
       <h2>Elija su Experiencia</h2>
       <p>Cada plato cuenta una historia. Descubra nuestras especialidades preparadas con producto local de temporada.</p>
     </div>
     <div class="cat-grid">
-      ${CATEGORIES.map(c => {
-        const count = DISHES.filter(d=>d.cat===c.key).length + state.customDishes.filter(d=>d.cat===c.key).length;
-        return `
+      ${CATEGORIES.map(c => `
         <button class="cat-tile accent-${c.accent}" onclick="go('category',{category:'${c.key}'})">
           <div class="cat-icon">${ICONS[c.icon]}</div>
           <h3>${c.label}</h3>
           <span>${c.tag}</span>
-          <div class="cat-count">${count} platos</div>
+          <div class="cat-count">${DISHES.filter(d=>d.cat===c.key).length} platos</div>
         </button>
-      `
-      }).join("")}
+      `).join("")}
     </div>
   </div>
   ${footer()}
@@ -1615,7 +1219,7 @@ function viewMenu(){
 
 function viewCategory(){
   const cat = CATEGORIES.find(c => c.key === state.category);
-  const dishes = getMenuDishes(state.category);
+  const dishes = DISHES.filter(d => d.cat === state.category);
   return `
   ${topbar('menu')}
   <div class="cat-header">
@@ -1699,50 +1303,37 @@ function viewAdminLogin(){
     <div class="shield">🛡</div>
     <div class="eyebrow">Acceso restringido</div>
     <h2>Modo Administrador</h2>
-    <p>Ingresa con tu cuenta administrativa. Solo el rol admin puede acceder.</p>
-    <input id="admin-email" type="email" placeholder="Correo administrativo" onkeydown="if(event.key==='Enter')tryAdminLogin()">
+    <p>Acceso exclusivo para personal del restaurante</p>
     <input id="admin-pass" type="password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')tryAdminLogin()">
     ${state.adminError ? `<p class="admin-error">${state.adminError}</p>` : ""}
     <button class="btn" style="width:100%;justify-content:center" onclick="tryAdminLogin()">Ingresar</button>
-    <div class="admin-note">Prototipo: esta autenticación es solo de demostración. Para producción, usa un backend real con MariaDB.</div>
+    <div class="admin-note">Prototipo: esta autenticación es solo de demostración. Para producción, usa un sistema de login real con backend.</div>
   </div>
   ${footer()}
   `;
 }
-async function tryAdminLogin(){
-  const email = (document.getElementById('admin-email')?.value || '').trim().toLowerCase();
-  const password = (document.getElementById('admin-pass')?.value || '').trim();
-  if(!email || !password){
-    state.adminError = 'Completa todos los campos administrativos.';
-    render();
-    return;
-  }
-  try {
-    const user = await apiRequest('/admin/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
-    state.adminError = '';
-    state.user = user;
-    await loadAdminResources();
+function tryAdminLogin(){
+  const val = document.getElementById("admin-pass").value;
+  if(val === ADMIN_PASSWORD){
+    state.adminError = "";
+    state.isAdmin = true;
     go('admin');
-  } catch (err) {
-    state.adminError = err.message;
+  }else{
+    state.adminError = "Contraseña incorrecta.";
     render();
   }
 }
 function adminLogout(){
-  state.user = null;
-  state.adminToken = null;
+  state.isAdmin = false;
   go('welcome');
 }
 
 function viewAdmin(){
-  const total = DISHES.length + state.customDishes.length;
+  const total = DISHES.length;
   const agotados = Object.values(state.availability).filter(Boolean).length;
   const disponibles = total - agotados;
-  const popularList = DISHES.concat(state.customDishes).filter(d => isPopular(d.id));
-  const chefList = DISHES.concat(state.customDishes).filter(d => isChef(d.id));
+  const popularList = DISHES.filter(d => isPopular(d.id));
+  const chefList = DISHES.filter(d => isChef(d.id));
   return `
   ${topbar('admin')}
   <div class="admin-wrap">
@@ -1750,7 +1341,7 @@ function viewAdmin(){
       <div>
         <div class="eyebrow">Panel del admin</div>
         <h2>Panel de Administrador</h2>
-        <p>Gestiona disponibilidad, promociones, combos y platos nuevos.</p>
+        <p>Gestiona la disponibilidad de los platos y destaca tus recomendaciones</p>
       </div>
       <div class="admin-actions">
         <button class="btn small" onclick="adminLogout()">⏻ Salir</button>
@@ -1762,17 +1353,14 @@ function viewAdmin(){
       <div class="stat-card warn"><div class="stat-num">${agotados}</div><div class="stat-label">Agotados (86)</div></div>
       <div class="stat-card pop"><div class="stat-num">${popularList.length}</div><div class="stat-label">Populares</div></div>
       <div class="stat-card chef"><div class="stat-num">${chefList.length}</div><div class="stat-label">Rec. Chef</div></div>
-      <div class="stat-card"><div class="stat-num">${state.promotions.length}</div><div class="stat-label">Promociones</div></div>
-      <div class="stat-card"><div class="stat-num">${state.combos.length}</div><div class="stat-label">Combos</div></div>
     </div>
 
     <div class="admin-tabs">
-      <button class="admin-tab ${state.adminTab==='86'?'active':''}" onclick="setAdminTab('86')">📋 Disponibilidad</button>
-      <button class="admin-tab ${state.adminTab==='featured'?'active':''}" onclick="setAdminTab('featured')">★ Destacados</button>
-      <button class="admin-tab ${state.adminTab==='resources'?'active':''}" onclick="setAdminTab('resources')">💼 Promociones y Combos</button>
+      <button class="admin-tab ${state.adminTab==='86'?'active':''}" onclick="setAdminTab('86')">📋 Disponibilidad (código 86)</button>
+      <button class="admin-tab ${state.adminTab==='featured'?'active':''}" onclick="setAdminTab('featured')">★ Populares y Recomendación del Chef</button>
     </div>
 
-    ${state.adminTab === 'resources' ? adminResourcesSection() : state.adminTab === 'featured' ? adminFeaturedSection(popularList, chefList) : adminAvailabilitySection()}
+    ${state.adminTab === 'featured' ? adminFeaturedSection(popularList, chefList) : adminAvailabilitySection()}
 
     <button class="btn ghost small" style="margin-top:16px" onclick="go('qr')">Generar código QR de mesa</button>
   </div>
@@ -1823,11 +1411,11 @@ function adminFeaturedSection(popularList, chefList){
     </div>
 
     ${CATEGORIES.map(c => `
-      <div class="admin-section-title">${c.label} (${DISHES.filter(d=>d.cat===c.key).length + state.customDishes.filter(x=>x.cat===c.key).length} platos)</div>
-      ${getMenuDishes(c.key).map(d => `
+      <div class="admin-section-title">${c.label} (${DISHES.filter(d=>d.cat===c.key).length} platos)</div>
+      ${DISHES.filter(d=>d.cat===c.key).map(d => `
         <div class="admin-row">
           <div>
-            <div class="name">${d.name}${d.id.startsWith('custom-') ? ' <small>(Nuevo)</small>' : ''}</div>
+            <div class="name">${d.name}</div>
             <span class="cat">${fmt(d.precio)}</span>
           </div>
           <div class="controls">
@@ -1837,105 +1425,6 @@ function adminFeaturedSection(popularList, chefList){
         </div>
       `).join("")}
     `).join("")}
-  `;
-}
-
-function adminResourcesSection(){
-  return `
-    <p class="admin-tab-note">Administra promociones, combos y nuevos platos sin tocar el código. Los cambios se guardan automáticamente.</p>
-    <div class="admin-resource-grid">
-      <div class="resource-panel">
-        <div class="resource-panel-head">
-          <div>
-            <h4>Promociones</h4>
-            <p>Ofertas especiales en la página principal.</p>
-          </div>
-          <button class="link-btn" onclick="document.getElementById('promo-title').focus()">+ Agregar</button>
-        </div>
-        <div class="resource-form">
-          <input id="promo-title" type="text" placeholder="Título de la promoción">
-          <input id="promo-price" type="number" placeholder="Precio" min="0">
-          <textarea id="promo-description" rows="3" placeholder="Descripción breve"></textarea>
-          <button class="btn small" onclick="addPromotion()">Guardar promoción</button>
-        </div>
-        <div class="resource-list">
-          ${state.promotions.length ? state.promotions.map(p => `
-            <div class="resource-row">
-              <div>
-                <strong>${p.title}</strong>
-                <span>${p.description}</span>
-              </div>
-              <div class="resource-actions">
-                <span>${p.price ? fmt(p.price) : 'Sin precio'}</span>
-                <button class="link-btn" onclick="removePromotion('${p.id}')">Eliminar</button>
-              </div>
-            </div>
-          `).join("") : `<div class="empty-state">No hay promociones activas todavía.</div>`}
-        </div>
-      </div>
-      <div class="resource-panel">
-        <div class="resource-panel-head">
-          <div>
-            <h4>Combos</h4>
-            <p>Paquetes de platos para menú de grupo.</p>
-          </div>
-          <button class="link-btn" onclick="document.getElementById('combo-title').focus()">+ Agregar</button>
-        </div>
-        <div class="resource-form">
-          <input id="combo-title" type="text" placeholder="Nombre del combo">
-          <input id="combo-price" type="number" placeholder="Precio" min="0">
-          <textarea id="combo-items" rows="3" placeholder="IDs de platos separados por comas (e1,cr1,po2)"></textarea>
-          <textarea id="combo-description" rows="3" placeholder="Descripción del combo"></textarea>
-          <button class="btn small" onclick="addCombo()">Guardar combo</button>
-        </div>
-        <div class="resource-list">
-          ${state.combos.length ? state.combos.map(c => `
-            <div class="resource-row">
-              <div>
-                <strong>${c.title}</strong>
-                <span>${c.items.map(getDishName).join(' · ')}</span>
-              </div>
-              <div class="resource-actions">
-                <span>${c.price ? fmt(c.price) : 'Sin precio'}</span>
-                <button class="link-btn" onclick="removeCombo('${c.id}')">Eliminar</button>
-              </div>
-            </div>
-          `).join("") : `<div class="empty-state">No hay combos registradas.</div>`}
-        </div>
-      </div>
-      <div class="resource-panel">
-        <div class="resource-panel-head">
-          <div>
-            <h4>Platos nuevos</h4>
-            <p>Agrega platos a las categorías sin tocar el código.</p>
-          </div>
-          <button class="link-btn" onclick="document.getElementById('dish-name').focus()">+ Agregar</button>
-        </div>
-        <div class="resource-form">
-          <input id="dish-name" type="text" placeholder="Nombre del plato">
-          <input id="dish-price" type="number" placeholder="Precio" min="0">
-          <input id="dish-category" type="text" placeholder="Categoría (key)" list="cat-list">
-          <datalist id="cat-list">${CATEGORIES.map(c=>`<option value="${c.key}">${c.label}</option>`).join('')}</datalist>
-          <textarea id="dish-ingredients" rows="3" placeholder="Ingredientes"></textarea>
-          <input id="dish-amount" type="text" placeholder="Cantidad / porción">
-          <button class="btn small" onclick="addCustomDish()">Guardar plato</button>
-        </div>
-        <div class="resource-list">
-          ${state.customDishes.length ? state.customDishes.map(d => `
-            <div class="resource-row">
-              <div>
-                <strong>${d.name}</strong>
-                <span>${d.cat} · ${d.cantidad || ''}</span>
-              </div>
-              <div class="resource-actions">
-                <span>${fmt(d.precio)}</span>
-                <button class="link-btn" onclick="removeCustomDish('${d.id}')">Eliminar</button>
-              </div>
-            </div>
-          `).join("") : `<div class="empty-state">No hay platos personalizados.</div>`}
-        </div>
-      </div>
-    </div>
   `;
 }
 
@@ -1983,9 +1472,6 @@ function render(){
     case "category": html = viewCategory(); break;
     case "admin-login": html = viewAdminLogin(); break;
     case "admin": html = viewAdmin(); break;
-    case "login": html = viewLogin(); break;
-    case "register": html = viewRegister(); break;
-    case "account": html = viewAccount(); break;
     case "qr": html = viewQR(); break;
     default: html = viewWelcome();
   }
@@ -1993,4 +1479,5 @@ function render(){
   if(state.view === "qr") setTimeout(updateQR, 0);
 }
 
-loadResources().then(() => render());
+loadState();
+render();
