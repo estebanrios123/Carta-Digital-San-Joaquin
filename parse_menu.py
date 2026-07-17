@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-p = Path('files/script.js')
+p = Path('index/script.js')
 text = p.read_text(encoding='utf-8')
 # parse categories
 cat_match = re.search(r'const CATEGORIES = \[(.*?)\];', text, re.S)

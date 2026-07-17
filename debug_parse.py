@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-text = Path('files/script.js').read_text(encoding='utf-8')
+text = Path('index/script.js').read_text(encoding='utf-8')
 start = text.index('const DISHES = [')
 brace = text.index('[', start)
 level = 1
