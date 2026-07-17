@@ -4,7 +4,7 @@ COLLATE utf8mb4_unicode_ci;
 
 USE `san_joaquin`;
 
-CREATE TABLE `roles` (
+CREATE TABLE IF NOT EXISTS `roles` (
   `role_id` INT AUTO_INCREMENT PRIMARY KEY,
   `role_key` VARCHAR(50) NOT NULL UNIQUE,
   `label` VARCHAR(100) NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE `roles` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `permissions` (
+CREATE TABLE IF NOT EXISTS`permissions` (
   `permission_id` INT AUTO_INCREMENT PRIMARY KEY,
   `permission_key` VARCHAR(100) NOT NULL UNIQUE,
   `label` VARCHAR(150) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE `permissions` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `role_permissions` (
+CREATE TABLE IF NOT EXISTS `role_permissions` (
   `role_permission_id` INT AUTO_INCREMENT PRIMARY KEY,
   `role_id` INT NOT NULL,
   `permission_id` INT NOT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE `role_permissions` (
   FOREIGN KEY (`permission_id`) REFERENCES `permissions`(`permission_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `staff` (
+CREATE TABLE IF NOT EXISTS `staff` (
   `staff_id` INT AUTO_INCREMENT PRIMARY KEY,
   `username` VARCHAR(100) NOT NULL UNIQUE,
   `password` VARCHAR(255) NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE `staff` (
   FOREIGN KEY (`role_id`) REFERENCES `roles`(`role_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `customers` (
+CREATE TABLE IF NOT EXISTS `customers` (
   `customer_id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(150) NOT NULL,
   `email` VARCHAR(150) NOT NULL UNIQUE,
@@ -55,7 +55,7 @@ CREATE TABLE `customers` (
   `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `promotions` (
+CREATE TABLE IF NOT EXISTS`promotions` (
   `promotion_id` INT AUTO_INCREMENT PRIMARY KEY,
   `title` VARCHAR(200) NOT NULL,
   `description` TEXT NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE `promotions` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `combos` (
+CREATE TABLE IF NOT EXISTS `combos` (
   `combo_id` INT AUTO_INCREMENT PRIMARY KEY,
   `title` VARCHAR(200) NOT NULL,
   `description` TEXT DEFAULT NULL,
@@ -75,7 +75,7 @@ CREATE TABLE `combos` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `combo_items` (
+CREATE TABLE IF NOT EXISTS `combo_items` (
   `combo_item_id` INT AUTO_INCREMENT PRIMARY KEY,
   `combo_id` INT NOT NULL,
   `item_key` VARCHAR(50) NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE `combo_items` (
   FOREIGN KEY (`combo_id`) REFERENCES `combos`(`combo_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `custom_dishes` (
+CREATE TABLE IF NOT EXISTS`custom_dishes` (
   `custom_dish_id` INT AUTO_INCREMENT PRIMARY KEY,
   `category_id` INT NOT NULL,
   `name` VARCHAR(200) NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE `custom_dishes` (
   FOREIGN KEY (`category_id`) REFERENCES `menu_categories`(`category_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `menu_categories` (
+CREATE TABLE IF NOT EXISTS `menu_categories` (
   `category_id` INT AUTO_INCREMENT PRIMARY KEY,
   `category_key` VARCHAR(50) NOT NULL UNIQUE,
   `name` VARCHAR(100) NOT NULL,
@@ -110,7 +110,7 @@ CREATE TABLE `menu_categories` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `menu_items` (
+CREATE TABLE IF NOT EXISTS `menu_items` (
   `item_id` INT AUTO_INCREMENT PRIMARY KEY,
   `category_id` INT NOT NULL,
   `item_key` VARCHAR(50) NOT NULL UNIQUE,
