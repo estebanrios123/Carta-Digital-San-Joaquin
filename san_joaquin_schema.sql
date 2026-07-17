@@ -83,20 +83,25 @@ CREATE TABLE IF NOT EXISTS `combo_items` (
   FOREIGN KEY (`combo_id`) REFERENCES `combos`(`combo_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS`custom_dishes` (
-  `custom_dish_id` INT AUTO_INCREMENT PRIMARY KEY,
-  `category_id` INT NOT NULL,
-  `name` VARCHAR(200) NOT NULL,
-  `description` TEXT DEFAULT NULL,
-  `ingredients` TEXT DEFAULT NULL,
-  `portion` VARCHAR(100) DEFAULT NULL,
-  `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `model_path` VARCHAR(255) DEFAULT NULL,
-  `is_available` TINYINT(1) NOT NULL DEFAULT 1,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (`category_id`) REFERENCES `menu_categories`(`category_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `custom_dishes` (
+    `custom_dish_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `category_id` INT NOT NULL,
+    `name` VARCHAR(200) NOT NULL,
+    `description` TEXT DEFAULT NULL,
+    `ingredients` TEXT DEFAULT NULL,
+    `portion` VARCHAR(100) DEFAULT NULL,
+    `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `model_path` VARCHAR(255) DEFAULT NULL,
+    `is_available` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_custom_dishes_category`
+        FOREIGN KEY (`category_id`)
+        REFERENCES `menu_categories` (`category_id`)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `menu_categories` (
   `category_id` INT AUTO_INCREMENT PRIMARY KEY,
